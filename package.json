@@ -1,0 +1,25 @@
+{
+  "name": "xmrigger-widget",
+  "version": "0.1.0",
+  "description": "Always-on-top mining guard widget for xmrigger-proxy",
+  "author": "tnzx@proton.me",
+  "license": "LGPL-2.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.0.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0",
+    "@vitejs/plugin-react": "^4.0.0",
+    "vite": "^5.0.0"
+  }
+}

@@ -1,0 +1,26 @@
+[package]
+name = "xmrigger-widget"
+version = "0.1.0"
+description = "Always-on-top mining guard widget for xmrigger-proxy"
+authors = ["tnzx@proton.me"]
+edition = "2021"
+rust-version = "1.70"
+
+[lib]
+name = "xmrigger_widget_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+[dependencies]
+tauri = { version = "2.0", features = [] }
+serde      = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

@@ -1,0 +1,48 @@
+{
+  "$schema": "https://schema.tauri.app/config/2.json",
+  "productName": "xmrigger-widget",
+  "version": "0.1.0",
+  "identifier": "com.xmrigger.widget",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "title": "xmrigger",
+        "width": 220,
+        "height": 140,
+        "minWidth": 220,
+        "minHeight": 140,
+        "resizable": false,
+        "fullscreen": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": false,
+        "visible": false,
+        "center": false,
+        "x": 40,
+        "y": 40
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' http://127.0.0.1:9090 ipc: http://ipc.localhost; img-src 'self' data:;"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}
