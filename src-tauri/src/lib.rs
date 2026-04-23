@@ -3,6 +3,8 @@ use tauri::{Emitter, Manager};
 
 struct XmrigState(Mutex<Option<std::process::Child>>);
 struct ProxyState(Mutex<Option<std::process::Child>>);
+// Prevents concurrent stop+start races on the proxy
+struct ProxyStartLock(Mutex<()>);
 
 // ── SHA256 hashes for XMRig v6.21.0 release archives ─────────────────────────
 // Source: https://github.com/xmrig/xmrig/releases/tag/v6.21.0
@@ -203,9 +205,22 @@ fn write_xmrig_config(
     wallet: String,
     password: String,
 ) -> Result<(), String> {
-    let dir = std::path::Path::new(&exe_path)
-        .parent()
-        .ok_or("invalid exe path")?;
+    let path = std::path::Path::new(&exe_path);
+
+    // Reject traversal attempts and non-exe paths before touching the filesystem
+    if exe_path.contains("..") {
+        return Err("invalid exe path: traversal not allowed".into());
+    }
+    if !path.is_file() {
+        return Err("exe_path does not point to an existing file".into());
+    }
+    // Ensure we're writing next to an actual executable, not into a system dir
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+    if cfg!(windows) && ext != "exe" {
+        return Err("exe_path must point to a .exe file".into());
+    }
+
+    let dir = path.parent().ok_or("invalid exe path")?;
     let config_path = dir.join("config.json");
 
     // Read existing config or start from minimal template
@@ -276,29 +291,28 @@ fn setup_antivirus_exclusions() -> Result<bool, String> {
             .unwrap_or_else(|| std::path::PathBuf::from("C:\\"))
             .join("xmrigger");
 
-        let script = format!(
-            r#"Add-MpPreference -ExclusionProcess 'xmrig.exe' -ErrorAction SilentlyContinue
-Add-MpPreference -ExclusionPath '{}' -ErrorAction SilentlyContinue"#,
-            install_dir.to_string_lossy()
-        );
+        // Escape single quotes so the path cannot break out of the PS string literal
+        let safe_path = install_dir.to_string_lossy().replace('\'', "''");
 
-        // Write script to temp file, run elevated via Start-Process -Verb RunAs
-        let script_path = std::env::temp_dir().join("xmrigger_av_setup.ps1");
-        std::fs::write(&script_path, &script).map_err(|e| e.to_string())?;
+        // Pass the two commands inline — no temp file, no TOCTOU window
+        let inline = format!(
+            "Add-MpPreference -ExclusionProcess 'xmrig.exe' -ErrorAction SilentlyContinue; \
+             Add-MpPreference -ExclusionPath '{}' -ErrorAction SilentlyContinue",
+            safe_path
+        );
 
         let status = std::process::Command::new("powershell")
             .args([
                 "-ExecutionPolicy", "Bypass",
                 "-Command",
                 &format!(
-                    "Start-Process powershell -ArgumentList '-ExecutionPolicy Bypass -File \"{}\"' -Verb RunAs -Wait",
-                    script_path.to_string_lossy()
+                    "Start-Process powershell -ArgumentList \"-ExecutionPolicy Bypass -Command `\"{}` \"\" -Verb RunAs -Wait",
+                    inline.replace('"', "\\\"")
                 ),
             ])
             .status()
             .map_err(|e| e.to_string())?;
 
-        let _ = std::fs::remove_file(&script_path);
         Ok(status.success())
     }
     #[cfg(not(windows))]
@@ -526,11 +540,14 @@ fn find_xmrigger_proxy() -> Option<String> {
 #[tauri::command]
 fn launch_proxy(
     state:      tauri::State<ProxyState>,
+    start_lock: tauri::State<ProxyStartLock>,
     proxy_path: String,
     pool:       String,
     listen_port: u16,
     stats_url:  String,
 ) -> Result<(), String> {
+    // Serialize concurrent start calls — prevents double-proxy on rapid clicks
+    let _guard = start_lock.0.lock().unwrap();
     let mut lock = state.0.lock().unwrap();
     if let Some(mut child) = lock.take() {
         let _ = child.kill();
@@ -638,6 +655,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(XmrigState(Mutex::new(None)))
         .manage(ProxyState(Mutex::new(None)))
+        .manage(ProxyStartLock(Mutex::new(())))
         .setup(|app| {
             if let Some(win) = app.get_webview_window("main") {
                 if let Ok(Some(mon)) = win.primary_monitor() {
